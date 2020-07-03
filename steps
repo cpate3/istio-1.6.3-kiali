@@ -1,0 +1,57 @@
+figlet "Istio Kiali Web Inerface"
+k version --short
+k get nodes
+curl -L https://git.io/getLatestIstio | ISTIO_VERSION=1.6.3 sh -
+
+#Next Steps:
+#See https://istio.io/docs/setup/kubernetes/install/ to add Istio to your Kubernetes cluster.
+To configure the istioctl client tool for your workstation,
+add the /Users/cpate3/kube/training-internal/istio-servicemesh-kiali/istio-1.6.3/bin directory to your environment path variable with:
+	 export PATH="$PATH:/Users/cpate3/kube/training-internal/istio-servicemesh-kiali/istio-1.6.3/bin"
+
+Begin the Istio pre-installation verification check by running:
+	 istioctl verify-install
+
+
+watch k get all -n istio-system
+helm install install/kubernetes/helm/istio-init --name istio-init --namespace istio-system
+# Go here :  https://istio.io/latest/docs/tasks/observability/kiali/
+
+# For Zsh variables to define
+KIALI_USERNAME=$(read '?Kiali Username: ' uval && echo -n $uval | base64)
+KIALI_PASSPHRASE=$(read -s "?Kiali Passphrase: " pval && echo -n $pval | base64)
+
+NAMESPACE=istio-system
+
+cat <<EOF | kubectl apply -f -
+apiVersion: v1
+kind: Secret
+metadata:
+  name: kiali
+  namespace: $NAMESPACE
+  labels:
+    app: kiali
+type: Opaque
+data:
+  username: $KIALI_USERNAME
+  passphrase: $KIALI_PASSPHRASE
+EOF
+
+k describe secret kiali -n istio-system
+helm install install/kubernetes/helm/istio --name istio --namespace istio-system --set grafana-enabled=True --set kiali-enabled=True
+k label namespace default istio-injection=enabled
+k create -f samples/bookinfo/platform/kube/bookinfo.yaml
+k create -f samples/bookinfo/networking/bookinfo-gateway.yaml
+k create -f samples/bookinfo/networking/destination-rule-all.yaml
+k get svc istio-ingressgateway -n istio-system
+# Try to access web service from outside world <ip>/productpage
+
+k get svc kiali -n istio-system
+# generate some traffic to the site
+watch curl -s -o /dev/null <ip>/productpage
+
+# change type ClusterIP to NodePort to get access OR just to port forwarding 
+k edit svc kiali -n istio-system
+k port-forward <Kiali Pod name> 20001:20001 -n istio-system
+
+
